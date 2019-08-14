@@ -1,27 +1,47 @@
 package com.zeeb.myfavoritemovie;
 
-import android.content.Intent;
+import android.content.CursorLoader;
+import android.content.Loader;
+import android.content.UriMatcher;
+import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
-import android.support.design.widget.TabLayout;
-import android.support.v4.app.FragmentManager;
-import android.support.v4.view.ViewPager;
+import android.app.LoaderManager;
+
+import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
+import android.view.LayoutInflater;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.TextView;
 
-import com.zeeb.myfavoritemovie.adapter.TabLayoutAdapter;
-import com.zeeb.myfavoritemovie.fragment.MovieFragment;
-import com.zeeb.myfavoritemovie.fragment.TvShowFragment;
+import com.bumptech.glide.Glide;
 
+import butterknife.BindView;
 import butterknife.ButterKnife;
 
 public class MainActivity extends AppCompatActivity {
 
-    private TabLayoutAdapter tabLayoutAdapter;
 
-    private FragmentManager fragmentManager;
+    public static final String AUTHORITY = "com.zeeb.moviecataloguelocalstorage.providers";
+    public static final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY + "/" + "tb_movie");
+    private static final int CODE_MOVIE_DIR = 1;
+    private static final int CODE_MOVIE_ITEM = 2;
+    @BindView(R.id.rv_movie)
+    RecyclerView rvMovie;
 
+
+    private RecyclerAdapter recyclerAdapter;
+
+
+    private static final UriMatcher MATCHER = new UriMatcher(UriMatcher.NO_MATCH);
+
+    static {
+        MATCHER.addURI(AUTHORITY, "tb_movie", CODE_MOVIE_DIR);
+        MATCHER.addURI(AUTHORITY, "tb_movie" + "/#", CODE_MOVIE_ITEM);
+    }
 
 
     @Override
@@ -30,48 +50,74 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
 
-        setPager();
+
+        recyclerAdapter = new RecyclerAdapter();
+        rvMovie.setLayoutManager(new LinearLayoutManager(this));
+        rvMovie.setAdapter(recyclerAdapter);
+        getLoaderManager().initLoader(CODE_MOVIE_DIR, null, loaderCallBack);
     }
 
-    public void setFragmentManager(FragmentManager fragmentManager) {
-        this.fragmentManager = fragmentManager;
-    }
-
-    public static MainActivity newInstance(FragmentManager fragmentManager) {
-        MainActivity fragment = new MainActivity();
-        fragment.setFragmentManager(fragmentManager);
-        return fragment;
-    }
-
-    private void setPager() {
-        ViewPager viewPager = (ViewPager) findViewById(R.id.vp_containerELearning);
-        setupViewPager(viewPager);
-
-        TabLayout tabs = (TabLayout) findViewById(R.id.tl_tabsAbsence);
-        tabs.setupWithViewPager(viewPager);
-    }
-
-    private void setupViewPager(ViewPager viewPager) {
-        tabLayoutAdapter = new TabLayoutAdapter(getSupportFragmentManager());
-        tabLayoutAdapter.addFragment(MovieFragment.newInstance(fragmentManager), getString(R.string.Movies));
-        tabLayoutAdapter.addFragment(TvShowFragment.newInstance(fragmentManager), getString(R.string.TvShows));
-        viewPager.setAdapter(tabLayoutAdapter);
-    }
-
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.main_menu, menu);
-        return super.onCreateOptionsMenu(menu);
-    }
-
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.action_change_settings) {
-            Intent mIntent = new Intent(Settings.ACTION_LOCALE_SETTINGS);
-            startActivity(mIntent);
+    private LoaderManager.LoaderCallbacks<Cursor> loaderCallBack = new LoaderManager.LoaderCallbacks<Cursor>() {
+        @Override
+        public Loader<Cursor> onCreateLoader(int id, Bundle args) {
+            return new CursorLoader(getApplicationContext(), CONTENT_URI, null, null, null, null);
         }
-        return super.onOptionsItemSelected(item);
+
+        @Override
+        public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
+            recyclerAdapter.setMovie(data);
+        }
+
+        @Override
+        public void onLoaderReset(Loader<Cursor> loader) {
+            recyclerAdapter.setMovie(null);
+        }
+    };
+
+
+    private class RecyclerAdapter extends RecyclerView.Adapter<RecyclerAdapter.ViewHolder> {
+        private Cursor cursor;
+
+        @NonNull
+        @Override
+        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            return new ViewHolder(parent);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+            if (cursor.moveToPosition(position)) {
+                holder.judul.setText(cursor.getString(cursor.getColumnIndexOrThrow("original_title")));
+                holder.score.setText(cursor.getString(cursor.getColumnIndexOrThrow("vote_average")));
+                Glide.with(getApplicationContext())
+                        .load(BuildConfig.URLIMAGE + cursor.getString(cursor.getColumnIndexOrThrow("poster_path")))
+                        .into(holder.imgPoster);
+            }
+        }
+
+        @Override
+        public int getItemCount() {
+            return cursor == null ? 0 : cursor.getCount();
+        }
+
+        void setMovie(Cursor o) {
+            cursor = o;
+            notifyDataSetChanged();
+        }
+
+        class ViewHolder extends RecyclerView.ViewHolder {
+
+            ImageView imgPoster;
+            TextView judul, score;
+
+            ViewHolder(ViewGroup parent) {
+                super(LayoutInflater.from(getApplicationContext()).inflate(R.layout.item_movie, parent, false));
+
+                imgPoster = itemView.findViewById(R.id.imgMoview);
+                judul = itemView.findViewById(R.id.tvJudulMoview);
+                score = itemView.findViewById(R.id.tvScoreMovie);
+            }
+        }
     }
 }
+
